@@ -1,0 +1,5 @@
+build/
+build-release/
+build-test/
+*.xcodeproj/xcuserdata/
+.DS_Store

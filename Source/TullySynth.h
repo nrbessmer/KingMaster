@@ -22,7 +22,10 @@
 
 namespace tsyn
 {
-    static constexpr int   kMaxVoices  = 8;
+   #ifndef TSYN_MAX_VOICES
+    #define TSYN_MAX_VOICES 8
+   #endif
+    static constexpr int   kMaxVoices  = TSYN_MAX_VOICES;   // Stellar Pads builds with 16
     static constexpr int   kMaxUnison  = 7;
     static constexpr float kTwoPi      = 6.283185307179586f;
     static constexpr double kTwoPiD    = 6.283185307179586;
@@ -521,6 +524,7 @@ namespace tsyn
         void prepare (double sampleRate, int maxBlock)
         {
             sr = sampleRate;
+            maxBlockSize = juce::jmax (1, maxBlock);
             for (auto& v : voices) v.prepare (sampleRate);
             fx.prepare (sampleRate, maxBlock);
             scratchL.assign ((size_t) juce::jmax (1, maxBlock), 0.0f); scratchR.assign ((size_t) juce::jmax (1, maxBlock), 0.0f);
@@ -564,6 +568,15 @@ namespace tsyn
 
         void render (float* L, float* R, int n)
         {
+            // Hosts may send more samples than prepareToPlay announced. The FX chain's
+            // juce::dsp::Chorus has per-block buffers sized to that maximum and would
+            // write past them, so render oversized blocks in announced-size pieces.
+            if (n > maxBlockSize)
+            {
+                for (int done = 0; done < n; done += maxBlockSize)
+                    render (L + done, R + done, juce::jmin (maxBlockSize, n - done));
+                return;
+            }
             std::fill (L, L + n, 0.0f); std::fill (R, R + n, 0.0f);
             if (n <= 0) return;
             UnisonLayout lay[2];
@@ -690,6 +703,7 @@ namespace tsyn
         }
 
         double sr = 44100.0;
+        int maxBlockSize = 512;
         Params prm; FxParams fxp;
         std::array<Voice, kMaxVoices> voices;
         int held[32] {}; int numHeld = 0;

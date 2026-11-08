@@ -32,6 +32,7 @@ bool KingMasterProcessor::isBusesLayoutSupported (const BusesLayout& l) const
 
 void KingMasterProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    monoScratchBuf.assign ((size_t) juce::jmax (1, samplesPerBlock) * 2, 0.0f);
     chain.prepare (sampleRate, juce::jmax (1, samplesPerBlock));
     setLatencySamples (chain.getLatency());
 }
@@ -44,8 +45,7 @@ void KingMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     if (n == 0 || nch == 0) return;
     float* L = buffer.getWritePointer (0);
     float* R = nch > 1 ? buffer.getWritePointer (1) : nullptr;
-    juce::HeapBlock<float> tmp;
-    if (R == nullptr) { tmp.allocate ((size_t) n, true); R = tmp.get(); std::copy (L, L + n, R); }
+    if (R == nullptr) { R = monoScratch (n); std::copy (L, L + n, R); }   // preallocated: no audio-thread malloc
     chain.process (L, R, n, reader.read());
     if (nch == 1) for (int i = 0; i < n; ++i) L[i] = 0.5f * (L[i] + R[i]);
     for (int c = 2; c < nch; ++c) buffer.clear (c, 0, n);

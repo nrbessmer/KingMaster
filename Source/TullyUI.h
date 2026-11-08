@@ -13,107 +13,32 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SynthParams.h"
+#include "TullyNeon.h"
 
 namespace tui
 {
-    namespace Col
+    namespace Col   // the shared neon palette (TullyNeon.h)
     {
-        const juce::Colour bg      { 0xff0a0c10 };
-        const juce::Colour panel   { 0xff13171d };
-        const juce::Colour panelHi { 0xff1b2129 };
-        const juce::Colour line    { 0xff2a323d };
-        const juce::Colour text    { 0xffd9e1ea };
-        const juce::Colour dim     { 0xff7d8896 };
-        const juce::Colour cyan    { 0xff2de2e6 };
-        const juce::Colour pink    { 0xffff2d8a };
-        const juce::Colour amber   { 0xffffb627 };
-        const juce::Colour violet  { 0xff9b6bff };
-        const juce::Colour green   { 0xff4be38a };
+        const juce::Colour bg      = neon::Pal::night0;
+        const juce::Colour panel   = neon::Pal::glass;
+        const juce::Colour panelHi = neon::Pal::glassHi;
+        const juce::Colour line    = neon::Pal::edge;
+        const juce::Colour text    = neon::Pal::text;
+        const juce::Colour dim     = neon::Pal::dim;
+        const juce::Colour cyan    = neon::Pal::cyan;
+        const juce::Colour pink    = neon::Pal::pink;
+        const juce::Colour amber   = neon::Pal::amber;
+        const juce::Colour violet  = neon::Pal::violet;
+        const juce::Colour green   = neon::Pal::green;
     }
 
     using APVTS = juce::AudioProcessorValueTreeState;
 
     //==========================================================================
-    class LnF : public juce::LookAndFeel_V4
+    class LnF : public neon::LookAndFeel
     {
     public:
-        LnF()
-        {
-            setColour (juce::ComboBox::backgroundColourId, Col::panelHi);
-            setColour (juce::ComboBox::outlineColourId, Col::line);
-            setColour (juce::ComboBox::textColourId, Col::text);
-            setColour (juce::PopupMenu::backgroundColourId, Col::panelHi);
-            setColour (juce::PopupMenu::textColourId, Col::text);
-            setColour (juce::PopupMenu::highlightedBackgroundColourId, Col::pink.withAlpha (0.35f));
-            setColour (juce::PopupMenu::headerTextColourId, Col::cyan);
-            setColour (juce::TextButton::buttonColourId, Col::panelHi);
-            setColour (juce::TextButton::buttonOnColourId, Col::pink);
-            setColour (juce::TextButton::textColourOffId, Col::text);
-            setColour (juce::TextButton::textColourOnId, Col::bg);
-            setColour (juce::TooltipWindow::backgroundColourId, Col::panelHi);
-            setColour (juce::TooltipWindow::textColourId, Col::text);
-            setColour (juce::TooltipWindow::outlineColourId, Col::cyan.withAlpha (0.6f));
-            setColour (juce::Label::textColourId, Col::text);
-        }
-
-        void drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos, float start, float end, juce::Slider& s) override
-        {
-            const auto c = s.findColour (juce::Slider::rotarySliderFillColourId);
-            auto b = juce::Rectangle<float> ((float) x, (float) y, (float) w, (float) h).reduced (3.0f);
-            const float r = juce::jmin (b.getWidth(), b.getHeight()) * 0.5f;
-            const auto ctr = b.getCentre();
-            const float th = juce::jmax (2.5f, r * 0.14f);
-            const bool hot = s.isMouseOverOrDragging();
-            const bool bip = s.getMinimum() < 0.0 && s.getMaximum() > 0.0;
-            juce::Path track; track.addCentredArc (ctr.x, ctr.y, r - th, r - th, 0, start, end, true);
-            g.setColour (Col::line); g.strokePath (track, juce::PathStrokeType (th, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-            const float from = bip ? start + 0.5f * (end - start) : start;
-            const float to = start + pos * (end - start);
-            juce::Path val; val.addCentredArc (ctr.x, ctr.y, r - th, r - th, 0, juce::jmin (from, to), juce::jmax (from, to), true);
-            if (hot) { g.setColour (c.withAlpha (0.25f)); g.strokePath (val, juce::PathStrokeType (th * 2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded)); }
-            g.setColour (c); g.strokePath (val, juce::PathStrokeType (th, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-            const float in = r - th * 2.3f;
-            g.setColour (hot ? Col::panelHi.brighter (0.08f) : Col::panelHi); g.fillEllipse (ctr.x - in, ctr.y - in, in * 2, in * 2);
-            g.setColour (Col::line); g.drawEllipse (ctr.x - in, ctr.y - in, in * 2, in * 2, 1.0f);
-            juce::Path ptr; ptr.addRoundedRectangle (-1.4f, -in + 2.5f, 2.8f, in * 0.55f, 1.4f);
-            g.setColour (Col::text); g.fillPath (ptr, juce::AffineTransform::rotation (to).translated (ctr.x, ctr.y));
-        }
-
-        void drawButtonBackground (juce::Graphics& g, juce::Button& b, const juce::Colour& bgc, bool over, bool down) override
-        {
-            auto r = b.getLocalBounds().toFloat().reduced (1.0f);
-            auto fill = b.getToggleState() ? b.findColour (juce::TextButton::buttonOnColourId) : bgc;
-            if (down) fill = fill.brighter (0.2f); else if (over) fill = fill.brighter (0.1f);
-            g.setColour (fill); g.fillRoundedRectangle (r, 5.0f);
-            g.setColour (over ? Col::cyan.withAlpha (0.7f) : Col::line); g.drawRoundedRectangle (r, 5.0f, 1.0f);
-        }
-
-        void drawComboBox (juce::Graphics& g, int w, int h, bool, int, int, int, int, juce::ComboBox& box) override
-        {
-            auto r = juce::Rectangle<float> (0, 0, (float) w, (float) h).reduced (0.5f);
-            g.setColour (box.findColour (juce::ComboBox::backgroundColourId)); g.fillRoundedRectangle (r, 5.0f);
-            g.setColour (box.isMouseOver (true) ? Col::cyan.withAlpha (0.7f) : Col::line); g.drawRoundedRectangle (r, 5.0f, 1.0f);
-            juce::Path a; const float ax = (float) w - 11.0f, ay = (float) h * 0.5f;
-            a.addTriangle (ax - 3.5f, ay - 2, ax + 3.5f, ay - 2, ax, ay + 2.5f);
-            g.setColour (Col::dim); g.fillPath (a);
-        }
-        void positionComboBoxText (juce::ComboBox& box, juce::Label& l) override
-        {
-            l.setBounds (4, 0, box.getWidth() - 20, box.getHeight());
-            l.setFont (getComboBoxFont (box));
-        }
-        juce::Font getComboBoxFont (juce::ComboBox& b) override { return juce::Font (juce::FontOptions (b.getHeight() < 22 ? 12.0f : 13.5f)); }
-        juce::Font getTextButtonFont (juce::TextButton&, int h) override { return juce::Font (juce::FontOptions (h < 22 ? 11.0f : 12.5f, juce::Font::bold)); }
-        juce::Font getPopupMenuFont() override { return juce::Font (juce::FontOptions (14.0f)); }
-        juce::Label* createSliderTextBox (juce::Slider& s) override
-        {
-            auto* l = LookAndFeel_V4::createSliderTextBox (s);
-            l->setFont (juce::FontOptions (10.5f));
-            l->setColour (juce::Label::textColourId, Col::text);
-            l->setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
-            l->setColour (juce::Label::backgroundColourId, juce::Colours::transparentBlack);
-            return l;
-        }
+        explicit LnF (juce::Colour accentColour = Col::cyan) : neon::LookAndFeel (accentColour) {}
     };
 
     //==========================================================================
@@ -182,23 +107,19 @@ namespace tui
     //==========================================================================
     inline void paintSection (juce::Graphics& g, juce::Rectangle<int> r, const juce::String& t, juce::Colour c)
     {
-        g.setColour (Col::panel); g.fillRoundedRectangle (r.toFloat(), 7.0f);
-        g.setColour (Col::line); g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 7.0f, 1.0f);
-        g.setColour (c); g.fillRoundedRectangle ((float) r.getX() + 10, (float) r.getY() + 9, 4, 12, 2);
-        g.setColour (Col::text); g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-        g.drawText (t, r.getX() + 19, r.getY() + 6, 160, 18, juce::Justification::left);
+        neon::glassPanel (g, r.toFloat(), c, t, 9.0f, 0.78f);
     }
 
     // Header: logo, product name, TULLY EDM VIBE, subtitle + version. Footer: (c) + email.
     inline void paintHeader (juce::Graphics& g, const juce::Image& logo, const juce::String& title, const juce::String& subtitle, juce::Colour accent)
     {
         if (logo.isValid()) g.drawImage (logo, juce::Rectangle<float> (12, 8, 58, 54), juce::RectanglePlacement::centred);
-        g.setColour (Col::text); g.setFont (juce::FontOptions (25.0f, juce::Font::bold));
-        g.drawText (title, 80, 10, 300, 30, juce::Justification::left);
-        g.setColour (accent); g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-        g.drawText ("TULLY EDM VIBE", 82, 40, 110, 14, juce::Justification::left);
+        neon::glowText (g, title, { 80.0f, 8.0f, 420.0f, 32.0f }, accent, 26.0f);
+        juce::Font f (juce::FontOptions (11.0f, juce::Font::bold)); f.setExtraKerningFactor (0.16f);
+        g.setFont (f); g.setColour (Col::pink);
+        g.drawText ("TULLY EDM VIBE", 82, 40, 120, 14, juce::Justification::left);
         g.setColour (Col::dim); g.setFont (juce::FontOptions (11.0f));
-        g.drawText (subtitle + "   v" + juce::String (JucePlugin_VersionString), 186, 40, 330, 14, juce::Justification::left);
+        g.drawText (subtitle + "   v" + juce::String (JucePlugin_VersionString), 200, 40, 360, 14, juce::Justification::left);
     }
     inline void paintFooter (juce::Graphics& g, juce::Rectangle<int> area)
     {
@@ -219,20 +140,9 @@ namespace tui
     }
 
     inline void paintBrandHeader (juce::Graphics& g, int width, int h, const juce::Image& productLogo, const juce::Image& tullyLogo,
-                                  const juce::String& title, const juce::String& subtitle, juce::Colour accent)
+                                  const juce::String& title, const juce::String& subtitle, juce::Colour accent, int textRight = 0)
     {
-        g.setColour (Col::panel.withAlpha (0.93f)); g.fillRect (0, 0, width, h);
-        g.setColour (accent); g.fillRect (0, h - 2, width, 2);
-        const int ls = h - 10;
-        if (productLogo.isValid())
-            g.drawImageWithin (productLogo, 6, 5, ls, ls, juce::RectanglePlacement::centred, false);
-        const int tx = productLogo.isValid() ? ls + 14 : 12;
-        g.setColour (accent); g.setFont (juce::FontOptions (25.0f, juce::Font::bold));
-        g.drawText (title, tx, 8, 300, 32, juce::Justification::bottomLeft);
-        g.setColour (Col::dim); g.setFont (juce::FontOptions (10.5f));
-        g.drawText (subtitle + "   v" + juce::String (JucePlugin_VersionString), tx + 1, 42, 300, 16, juce::Justification::left);
-        g.setColour (Col::text.withAlpha (0.85f)); g.setFont (juce::FontOptions (10.5f, juce::Font::bold));
-        g.drawText ("TULLY EDM VIBE", tx + 1, 56, 200, 12, juce::Justification::left);
+        neon::paintHeader (g, { 0, 0, width, h }, productLogo, title, "v" + juce::String (JucePlugin_VersionString) + "   " + subtitle, accent, textRight);
         // right: Tully logo + (c)
         const int bw = 200, lh = h - 12;
         if (tullyLogo.isValid())
@@ -265,15 +175,7 @@ namespace tui
     // translucent section so the watermark shows through (like Bass Professor)
     inline void paintGlassSection (juce::Graphics& g, juce::Rectangle<int> r, const juce::String& t, juce::Colour c)
     {
-        auto rf = r.toFloat();
-        g.setColour (juce::Colours::black.withAlpha (0.55f)); g.fillRoundedRectangle (rf, 7.0f);
-        auto title = rf.withHeight (24.0f);
-        g.setGradientFill (juce::ColourGradient (c.withAlpha (0.20f), title.getX(), title.getY(), juce::Colours::transparentBlack, title.getX(), title.getBottom(), false));
-        g.fillRoundedRectangle (title, 7.0f);
-        g.setColour (Col::line.withAlpha (0.8f)); g.drawRoundedRectangle (rf.reduced (0.5f), 7.0f, 1.0f);
-        g.setColour (c); g.fillRoundedRectangle (rf.getX() + 10, rf.getY() + 7, 3.5f, 12, 1.75f);
-        g.setColour (Col::text); g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-        g.drawText (t, r.getX() + 19, r.getY() + 4, r.getWidth() - 24, 18, juce::Justification::left);
+        neon::glassPanel (g, r.toFloat(), c, t, 9.0f, 0.62f);
     }
 
     // vertical level meter (dB) with peak value text
@@ -289,16 +191,21 @@ namespace tui
             auto cap = b.removeFromBottom (14);
             auto txt = b.removeFromBottom (14);
             auto bar = b.reduced (b.getWidth() * 0.28f, 2);
-            g.setColour (juce::Colour (0xff0d1014)); g.fillRoundedRectangle (bar, 3.0f);
+            g.setColour (juce::Colours::black.withAlpha (0.6f)); g.fillRoundedRectangle (bar.expanded (2.0f), 4.0f);
             const float v = juce::jlimit (0.0f, 1.0f, (value - minDb) / (maxDb - minDb));
-            juce::Rectangle<float> fill;
-            if (reduction) fill = bar.withHeight (bar.getHeight() * (1.0f - v));        // gain reduction grows down from the top
-            else           fill = bar.withTrimmedTop (bar.getHeight() * (1.0f - v));
-            if (! reduction)
-                g.setGradientFill (juce::ColourGradient (Col::pink, bar.getX(), bar.getY(), colour, bar.getX(), bar.getBottom(), false));
-            else g.setColour (colour);
-            g.fillRoundedRectangle (fill, 3.0f);
-            g.setColour (Col::line); g.drawRoundedRectangle (bar, 3.0f, 1.0f);
+            const float lit = reduction ? 1.0f - v : v;
+            // LED segments: lit ones glow (accent -> brand pink at the top), unlit ones ghost
+            const int segs = juce::jmax (6, (int) (bar.getHeight() / 5.0f));
+            const float sh = bar.getHeight() / (float) segs;
+            for (int i = 0; i < segs; ++i)
+            {
+                const float f = (float) (i + 0.5f) / (float) segs;          // 0 = bottom
+                const bool on = reduction ? (1.0f - f) < lit : f < lit;
+                auto seg = juce::Rectangle<float> (bar.getX(), bar.getBottom() - (float) (i + 1) * sh, bar.getWidth(), sh).reduced (0.0f, 0.8f);
+                const auto col = reduction ? colour : colour.interpolatedWith (Col::pink, juce::jlimit (0.0f, 1.0f, (f - 0.55f) / 0.45f));
+                if (on) { g.setColour (col.withAlpha (0.25f)); g.fillRoundedRectangle (seg.expanded (2.0f, 0.5f), 2.0f); }
+                g.setColour (on ? col : col.withAlpha (0.10f)); g.fillRoundedRectangle (seg, 1.5f);
+            }
             g.setColour (Col::text); g.setFont (juce::FontOptions (10.0f));
             g.drawText (value <= minDb + 0.1f ? juce::String ("-inf") : juce::String (value, 1), txt, juce::Justification::centred);
             g.setColour (Col::dim); g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
@@ -386,7 +293,9 @@ namespace tui
         void paint (juce::Graphics& g) override
         {
             auto r = getLocalBounds().toFloat();
-            g.setColour (juce::Colour (0xff0d1014)); g.fillRoundedRectangle (r, 6.0f);
+            g.setColour (juce::Colours::black.withAlpha (0.6f)); g.fillRoundedRectangle (r, 6.0f);
+            g.setColour (colour.withAlpha (0.06f));
+            for (int k = 1; k < 8; ++k) g.drawVerticalLine ((int) (r.getX() + r.getWidth() * (float) k / 8.0f), r.getY() + 2, r.getBottom() - 2);
             g.setColour (Col::line.withAlpha (0.6f)); g.drawHorizontalLine ((int) r.getCentreY(), r.getX(), r.getRight());
             // trigger on a rising zero crossing so the wave stands still
             const int w = buf.writePos.load (std::memory_order_acquire);
@@ -407,8 +316,7 @@ namespace tui
                 const float y = r.getCentreY() - v * r.getHeight() * 0.42f;
                 if (k == 0) p.startNewSubPath (x, y); else p.lineTo (x, y);
             }
-            g.setColour (colour.withAlpha (0.25f)); g.strokePath (p, juce::PathStrokeType (3.0f));
-            g.setColour (colour); g.strokePath (p, juce::PathStrokeType (1.3f));
+            neon::strokeGlow (g, p, colour, 1.4f);
             g.setColour (Col::line); g.drawRoundedRectangle (r.reduced (0.5f), 6.0f, 1.0f);
         }
     private:

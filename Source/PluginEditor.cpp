@@ -132,6 +132,7 @@ KingMasterEditor::KingMasterEditor (KingMasterProcessor& p)
       monoBass (p.apvts, "mono_bass", "MONO BASS", gold, "Keeps everything below 120 Hz in mono: tighter low end on club systems and vinyl."),
       compare (p.apvts, "compare", "COMPARE", Col::cyan, "Hear your original mix at the same loudness as the master, so you judge the sound, not the volume.")
 {
+    lnf.setAccent (gold);
     setLookAndFeel (&lnf);
     logo = juce::ImageCache::getFromMemory (BinaryData::TullyLogo_png, BinaryData::TullyLogo_pngSize);
     productLogo = juce::ImageCache::getFromMemory (BinaryData::KingMasterLogo_png, BinaryData::KingMasterLogo_pngSize);
@@ -180,9 +181,9 @@ void KingMasterEditor::timerCallback()
 
 void KingMasterEditor::paint (juce::Graphics& g)
 {
-    g.fillAll (Col::bg);
+    neon::paintBackdrop (g, getLocalBounds(), gold, backdrop);
     tui::paintWatermark (g, productLogo, getLocalBounds(), 0.18f);
-    tui::paintBrandHeader (g, getWidth(), 76, productLogo, logo, "KING MASTER", "STYLE-BASED MASTERING", gold);
+    tui::paintBrandHeader (g, getWidth(), 76, productLogo, logo, "KING MASTER", "STYLE-BASED MASTERING", gold, presetBar.getX() - 10);
     tui::paintGlassSection (g, rStyle, "STYLE", gold);
     tui::paintGlassSection (g, rLoud, "LOUDNESS", Col::pink);
     tui::paintGlassSection (g, rLearn, "LEARN", gold);

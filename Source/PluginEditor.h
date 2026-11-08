@@ -81,6 +81,7 @@ public:
 
     KingMasterProcessor& proc;
     tui::LnF lnf;
+    neon::BackdropCache backdrop;
     juce::Image logo, productLogo;
     tui::PresetBar presetBar;
     tui::BrandLinks links;

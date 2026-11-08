@@ -159,7 +159,7 @@ namespace tdsp
             ringPos = (ringPos + 1) % kRing; acc = 0; accN = 0; ++blocksSeen;
             auto meanOf = [this] (int nb)
             {
-                double s = 0; const int k = (int) juce::jmin<long long> (nb, blocksSeen);
+                double s = 0; const int k = (int) std::min<long long> ((long long) nb, blocksSeen);
                 for (int j = 1; j <= k; ++j) s += ring[(size_t) ((ringPos - j + kRing) % kRing)];
                 return k > 0 ? s / nb : 0.0;
             };

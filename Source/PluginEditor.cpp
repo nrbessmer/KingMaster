@@ -1,6 +1,6 @@
 /*
   ==============================================================================
-    King Master - PluginEditor.cpp
+    Mister Master - PluginEditor.cpp
     (c)(p) 2026 Tully EDM Vibe
   ==============================================================================
 */
@@ -58,7 +58,7 @@ LearnPanel::LearnPanel (kmaster::Chain& c) : chain (c)
 {
     learn.setColour (juce::TextButton::buttonColourId, gold.withAlpha (0.85f));
     learn.setColour (juce::TextButton::textColourOffId, Col::bg);
-    learn.setTooltip ("Play the loudest part of your song and press LEARN. King Master listens for about 20 seconds, then sets the tone match, compression and loudness for you. It also starts by itself the first time it hears audio.");
+    learn.setTooltip ("Play the loudest part of your song and press LEARN. Mister Master listens for about 20 seconds, then sets the tone match, compression and loudness for you. It also starts by itself the first time it hears audio.");
     learn.onClick = [this] { chain.startLearning(); };
     addAndMakeVisible (learn);
 }
@@ -74,7 +74,7 @@ void LearnPanel::paint (juce::Graphics& g)
     juce::String a, c;
     switch (ph)
     {
-        case kmaster::Chain::Idle:     a = "Ready"; c = "Press play: King Master starts learning by itself. Use the loudest part of your song."; break;
+        case kmaster::Chain::Idle:     a = "Ready"; c = "Press play: Mister Master starts learning by itself. Use the loudest part of your song."; break;
         case kmaster::Chain::Spectrum: a = "Listening to your tone..."; c = "Keep the loudest part of the song playing."; break;
         case kmaster::Chain::Bands:    a = "Measuring dynamics..."; c = "Keep it playing."; break;
         case kmaster::Chain::Gain:     a = "Setting loudness..."; c = "Almost there."; break;
@@ -135,7 +135,7 @@ KingMasterEditor::KingMasterEditor (KingMasterProcessor& p)
     lnf.setAccent (gold);
     setLookAndFeel (&lnf);
     logo = juce::ImageCache::getFromMemory (BinaryData::TullyLogo_png, BinaryData::TullyLogo_pngSize);
-    productLogo = juce::ImageCache::getFromMemory (BinaryData::KingMasterLogo_png, BinaryData::KingMasterLogo_pngSize);
+    productLogo = juce::ImageCache::getFromMemory (BinaryData::MisterMasterLogo_png, BinaryData::MisterMasterLogo_pngSize);
 
     presetBar.getCurrent = [this] { return proc.getCurrentPreset(); };
     presetBar.load = [this] (int i) { proc.loadPreset (i); };
@@ -183,7 +183,7 @@ void KingMasterEditor::paint (juce::Graphics& g)
 {
     neon::paintBackdrop (g, getLocalBounds(), gold, backdrop);
     tui::paintWatermark (g, productLogo, getLocalBounds(), 0.18f);
-    tui::paintBrandHeader (g, getWidth(), 76, productLogo, logo, "KING MASTER", "STYLE-BASED MASTERING", gold, presetBar.getX() - 10);
+    tui::paintBrandHeader (g, getWidth(), 76, productLogo, logo, "MISTER MASTER", "STYLE-BASED MASTERING", gold, presetBar.getX() - 10);
     tui::paintGlassSection (g, rStyle, "STYLE", gold);
     tui::paintGlassSection (g, rLoud, "LOUDNESS", Col::pink);
     tui::paintGlassSection (g, rLearn, "LEARN", gold);

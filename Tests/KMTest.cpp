@@ -1,4 +1,4 @@
-// KMTest: automated checks for King Master.
+// KMTest: automated checks for Mister Master.
 // Usage: KMTest mix_unmastered.wav outDir
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "../Source/PluginProcessor.h"
@@ -247,7 +247,7 @@ int main (int argc, char** argv)
         std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
         static_cast<KingMasterEditor*> (ed.get())->timerCallback();
         auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
-        juce::File f = outDir.getChildFile ("kingmaster_ui.png"); f.deleteFile();
+        juce::File f = outDir.getChildFile ("mistermaster_ui.png"); f.deleteFile();
         { juce::FileOutputStream fos (f); juce::PNGImageFormat().writeImageToStream (img, fos); }
         check (img.getWidth() == 1080, "editor renders");
     }

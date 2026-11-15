@@ -1,10 +1,10 @@
 /*
   ==============================================================================
-    King Master - MasterPresets.h
+    Mister Master - MasterPresets.h
     (c)(p) 2026 Tully EDM Vibe
 
     Starting points by genre. Loading one keeps what LEARN found about your
-    song; King Master then re-checks the output level for the new settings.
+    song; Mister Master then re-checks the output level for the new settings.
   ==============================================================================
 */
 #pragma once

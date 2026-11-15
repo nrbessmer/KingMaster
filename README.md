@@ -1,8 +1,8 @@
-# King Master
+# Mister Master
 (c)(p) 2026 Tully EDM Vibe - info@tullyedmvibe.com - www.tullyedmvibe.com
 
 Style-based mastering. Choose a STYLE (Warm, Balanced, Open) and a LOUDNESS (Low -14, Medium -11, High -8 LUFS),
-play the loudest part of your song and King Master LEARNs: it measures the spectrum, band levels and loudness,
+play the loudest part of your song and Mister Master LEARNs: it measures the spectrum, band levels and loudness,
 sets a Smart EQ tone match, 3-band glue compression and the gain, then checks its own output and corrects itself.
 
 Chain: Smart EQ > style tilt + Low / Mid / Presence / Air > 3-band compression + de-ess > width + mono bass

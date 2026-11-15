@@ -3,7 +3,7 @@
     Tully EDM Vibe - TullyDSP.h
     (c)(p) 2026 Tully EDM Vibe
 
-    Shared effect building blocks for VocalPunch and King Master:
+    Shared effect building blocks for VocalPunch and Mister Master:
     RBJ biquads, envelope / compressor gain computer, an ITU-R BS.1770-4
     loudness meter (momentary, short-term, gated integrated), a 4x true-peak
     detector and a lookahead brick-wall limiter. Allocation-free after prepare().

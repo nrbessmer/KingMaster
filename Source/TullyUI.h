@@ -128,7 +128,7 @@ namespace tui
     }
 
     //==========================================================================
-    // Bass Professor style branding (VocalPunch, King Master):
+    // Bass Professor style branding (VocalPunch, Mister Master):
     // product logo as a faint full-window watermark + header thumbnail, and the
     // Tully EDM Vibe logo next to the (c) line with clickable email + website.
     inline void paintWatermark (juce::Graphics& g, const juce::Image& img, juce::Rectangle<int> area, float alpha)

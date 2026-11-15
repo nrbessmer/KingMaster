@@ -1,6 +1,6 @@
 /*
   ==============================================================================
-    King Master - MasterChain.h
+    Mister Master - MasterChain.h
     (c)(p) 2026 Tully EDM Vibe
 
     Style-based mastering in the spirit of online mastering services:
@@ -9,7 +9,7 @@
       mono bass > loudness gain (learned to hit the target LUFS) > warmth
       soft-clip > true-peak lookahead limiter > BS.1770 loudness metering.
 
-    LEARN: play the loudest part of the song for ~20 s. King Master measures
+    LEARN: play the loudest part of the song for ~20 s. Mister Master measures
     the spectrum, band levels and loudness, sets the Smart EQ and compressor
     thresholds, then the gain that lands the master on the target loudness,
     and finally checks the real output and corrects itself.

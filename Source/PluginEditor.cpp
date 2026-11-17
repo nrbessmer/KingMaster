@@ -5,6 +5,7 @@
   ==============================================================================
 */
 #include "PluginEditor.h"
+#include "TullyLicence.h"
 #include "BinaryData.h"
 
 namespace Col = tui::Col;
@@ -165,6 +166,8 @@ KingMasterEditor::KingMasterEditor (KingMasterProcessor& p)
         addAndMakeVisible (c);
     setSize (1080, 680);
     startTimerHz (20);
+
+    tully::addActivation (*this);   // activation screen until this Mac is licensed
 }
 
 KingMasterEditor::~KingMasterEditor() { stopTimer(); setLookAndFeel (nullptr); }

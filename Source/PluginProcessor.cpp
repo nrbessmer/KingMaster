@@ -5,6 +5,7 @@
   ==============================================================================
 */
 #include "PluginProcessor.h"
+#include "TullyLicence.h"
 #include "PluginEditor.h"
 
 juce::AudioProcessorValueTreeState::ParameterLayout KingMasterProcessor::createLayout()
@@ -19,6 +20,8 @@ KingMasterProcessor::KingMasterProcessor()
                                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PARAMS", createLayout())
 {
+    tully::licence ("King Master");   // purchase activation (TullyLicence.h)
+
     reader.attach (apvts);
     loadPreset (0);
 }
@@ -39,6 +42,8 @@ void KingMasterProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 
 void KingMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
+    if (! tully::licence().ok()) return;   // not activated yet: the sound passes through untouched
+
     juce::ScopedNoDenormals nd;
     midi.clear();
     const int n = buffer.getNumSamples(), nch = buffer.getNumChannels();

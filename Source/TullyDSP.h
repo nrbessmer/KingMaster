@@ -198,13 +198,14 @@ namespace tdsp
     };
 
     //==========================================================================
-    // 4x oversampled peak estimate (BS.1770 Annex 2 style), 48-tap windowed sinc.
-    // process() returns the largest |value| among the 4 interpolated points that
+    // 8x oversampled peak estimate (BS.1770 Annex 2 style), windowed sinc with 32 taps per phase. The old
+    // 4x / 12 taps under-read peaks above about 10 kHz, so hats and clicks slipped past the limiter.
+    // process() returns the largest |value| among the 8 interpolated points that
     // lie between the previous and current sample, delayed by kDelay samples.
     class TruePeak
     {
     public:
-        static constexpr int kTaps = 12, kPhases = 4, kDelay = kTaps / 2;
+        static constexpr int kTaps = 32, kPhases = 8, kDelay = kTaps / 2;
         TruePeak()
         {
             for (int p = 0; p < kPhases; ++p)
@@ -214,7 +215,7 @@ namespace tdsp
                 {
                     const double x = (double) (t - kTaps / 2 + 1) - (double) p / kPhases;   // distance in input samples
                     const double n = (double) (t * kPhases + p) / (kTaps * kPhases - 1);
-                    const double win = 0.42 - 0.5 * std::cos (2 * kPi * n) + 0.08 * std::cos (4 * kPi * n);
+                    const double win = 0.5 - 0.5 * std::cos (2 * kPi * n);
                     const double s = std::abs (x) < 1e-9 ? 1.0 : std::sin (kPi * x) / (kPi * x);
                     coef[(size_t) p][(size_t) t] = (float) (s * win); sum += s * win;
                 }
@@ -253,15 +254,18 @@ namespace tdsp
         {
             sr = sampleRate;
             L = juce::jmax (8, (int) std::lround (lookaheadMs * 0.001 * sr));
-            audioDelay = L + TruePeak::kDelay - 3;   // the peak detector looks ~6 samples back; gain window covers [n-L+1, n]
+            // The detector reports the peak between samples t and t+1 at time t + kDelay. The gain is the average of
+            // the last L values, so it has fully arrived at t + kDelay + L - 1: the audio must leave the delay line
+            // exactly then (it used to leave 2 samples early). kHold keeps it there around the peak as well.
+            audioDelay = L + TruePeak::kDelay - 1 + kHold;
             for (auto& d : delay) d.assign ((size_t) audioDelay, 0.0f);
-            hold.assign ((size_t) L, 1.0f); avg.assign ((size_t) L, 1.0f);
+            hold.assign ((size_t) (L + 2 * kHold), 1.0f); avg.assign ((size_t) L, 1.0f);
             setRelease (80.0);
             reset();
         }
         int getLatency() const noexcept { return audioDelay; }
         void setRelease (double ms) { relCoef = timeCoef (ms, sr); }
-        void setCeilingDb (float db) { ceiling = dbToGain (db - 0.15f); }
+        void setCeilingDb (float db) { ceiling = dbToGain (db - 0.25f); }
         void reset()
         {
             for (auto& d : delay) std::fill (d.begin(), d.end(), 0.0f);
@@ -278,9 +282,10 @@ namespace tdsp
                 const float pk = juce::jmax (tpL.process (l[i]), tpR.process (r[i]));
                 const float need = pk > ceiling ? ceiling / pk : 1.0f;
                 // sliding min over L samples (L is small: a few hundred, so a scan is cheap enough)
-                hold[(size_t) hpos] = need; hpos = (hpos + 1) % L;
+                const int H = L + 2 * kHold;
+                hold[(size_t) hpos] = need; hpos = (hpos + 1) % H;
                 float h = 1.0f;
-                for (int k = 0; k < L; ++k) h = juce::jmin (h, hold[(size_t) k]);
+                for (int k = 0; k < H; ++k) h = juce::jmin (h, hold[(size_t) k]);
                 released = juce::jmin (h, 1.0f - (1.0f - released) * relCoef);   // instant attack, exponential release, never above h
                 avgSum -= avg[(size_t) apos]; avg[(size_t) apos] = released; avgSum += released; apos = (apos + 1) % L;
                 const float g = juce::jmin (1.0f, (float) (avgSum / (double) L));
@@ -298,7 +303,8 @@ namespace tdsp
         std::atomic<float> gr { 0.0f };   // last block's max gain reduction (dB, <= 0)
 
     private:
-        float ceilingHard() const noexcept { return ceiling * 1.0177f; }   // +0.15 dB back
+        static constexpr int kHold = 6;
+        float ceilingHard() const noexcept { return ceiling * 1.0292f; }   // +0.25 dB back
         double sr = 48000.0;
         int L = 240, audioDelay = 245, dpos = 0, hpos = 0, apos = 0;
         std::array<std::vector<float>, 2> delay;

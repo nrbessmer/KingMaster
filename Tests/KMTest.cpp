@@ -105,7 +105,7 @@ int main (int argc, char** argv)
         const float L = lufs (o, SR), tgt = kmaster::targetLufs (loud), tp = truePeakDb (o);
         check (p.chain.phase.load() == kmaster::Chain::Done, kmaster::loudNames()[loud] + ": learning finished within one play-through");
         check (std::abs (L - tgt) <= 1.0f, kmaster::loudNames()[loud] + ": master at " + juce::String (L, 2) + " LUFS (target " + juce::String (tgt, 0) + " +-1)");
-        check (tp <= -0.8f, kmaster::loudNames()[loud] + ": true peak " + juce::String (tp, 2) + " dBTP (ceiling -1.0)");
+        check (tp <= -0.95f, kmaster::loudNames()[loud] + ": true peak " + juce::String (tp, 2) + " dBTP (ceiling -1.0)");
         if (loud == 1)
         {
             juce::WavAudioFormat wav; auto wf = outDir.getChildFile ("mastered_medium.wav"); wf.deleteFile();
@@ -211,7 +211,42 @@ int main (int argc, char** argv)
         tdsp::Limiter lim; lim.prepare (SR); lim.setCeilingDb (-1.0f);
         lim.process (hot.getWritePointer (0), hot.getWritePointer (1), hot.getNumSamples());
         const float tp = truePeakDb (hot);
-        check (tp <= -0.8f, "limiter with +18 dB of overdrive: true peak " + juce::String (tp, 2) + " dBTP (ceiling -1)");
+        check (tp <= -0.95f, "limiter with +18 dB of overdrive: true peak " + juce::String (tp, 2) + " dBTP (ceiling -1)");
+    }
+
+    // ---- loud, drum-heavy material: sharp kicks, snares and 16th hats, already at about -13 LUFS (1.4.1: the limiter
+    //      let such a mix through at up to +1 dBTP with the ceiling at -1)
+    {
+        juce::AudioBuffer<float> drums (2, (int) SR * 12); drums.clear();
+        juce::Random rnd (1234); const int n16 = (int) (SR * 60.0 / 128.0 / 4.0);
+        for (int k = 0; k * n16 < drums.getNumSamples(); ++k)
+        {
+            const int at = k * n16; const bool kick = k % 4 == 0, snare = k % 8 == 4; const float pan = k % 2 ? 0.8f : 1.0f;
+            for (int i = 0; i < n16 * 2 && at + i < drums.getNumSamples(); ++i)
+            {
+                const float t = (float) i / (float) SR; float x = 0;
+                if (kick) x += 0.75f * std::sin (6.2831853f * (46.0f * t + 3.0f * (1.0f - std::exp (-t * 38.0f)))) * std::exp (-t * 7.0f) + 0.35f * (rnd.nextFloat() * 2 - 1) * std::exp (-t * 900.0f);
+                if (snare) x += 0.55f * (rnd.nextFloat() * 2 - 1) * std::exp (-t * 22.0f);
+                float hat = 0.0f; for (float f : { 11500.0f, 14300.0f, 17600.0f, 19900.0f }) hat += std::sin (6.2831853f * f * t + f);
+                x += 0.10f * hat * std::exp (-t * 60.0f) + 0.12f * std::sin (6.2831853f * 55.0f * ((float) (at + i) / (float) SR));
+                drums.addSample (0, at + i, x); drums.addSample (1, at + i, x * pan);
+            }
+        }
+        printf ("      drum mix: %.1f LUFS, peak %.1f dBFS\n", lufs (drums, SR), tdsp::gainToDb (drums.getMagnitude (0, drums.getNumSamples())));
+        for (int loud = 0; loud < 3; ++loud)
+        {
+            KingMasterProcessor p; prep (p, SR, 512); setP (p, "loudness", (float) loud);
+            auto o = run (p, drums, 2); const float tp = truePeakDb (o);
+            check (tp <= -0.95f, "drum mix, " + kmaster::loudNames()[loud] + ": true peak " + juce::String (tp, 2) + " dBTP (ceiling -1.0)");
+        }
+        for (float gain : { 6.0f, 18.0f })
+        {
+            juce::AudioBuffer<float> hot (drums); hot.applyGain (tdsp::dbToGain (gain));
+            tdsp::Limiter lim; lim.prepare (SR); lim.setCeilingDb (-1.0f);
+            lim.process (hot.getWritePointer (0), hot.getWritePointer (1), hot.getNumSamples());
+            const float tp = truePeakDb (hot);
+            check (tp <= -0.95f, "drum mix +" + juce::String (gain, 0) + " dB into the limiter: true peak " + juce::String (tp, 2) + " dBTP (ceiling -1)");
+        }
     }
 
     // ---- save / restore keeps the learned master

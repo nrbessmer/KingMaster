@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(KingMaster VERSION 1.4.0)
+project(KingMaster VERSION 1.4.1)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "" FORCE)
@@ -61,7 +61,7 @@ target_link_libraries(KingMaster
 option(KM_TESTS "Build the self-test console app" OFF)
 if(KM_TESTS)
   juce_add_console_app(KMTest PRODUCT_NAME "KMTest")
-  target_compile_definitions(KMTest PRIVATE JucePlugin_Name="Mister Master" JucePlugin_VersionString="1.2.0" JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+  target_compile_definitions(KMTest PRIVATE JucePlugin_Name="Mister Master" JucePlugin_VersionString="${PROJECT_VERSION}" JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
   target_link_libraries(KMTest PRIVATE KingMasterData juce::juce_audio_utils juce::juce_dsp PUBLIC juce::juce_recommended_config_flags)
   target_sources(KMTest PRIVATE Tests/KMTest.cpp Source/PluginProcessor.cpp Source/PluginEditor.cpp)
 endif()

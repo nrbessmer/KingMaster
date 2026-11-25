@@ -188,6 +188,7 @@ namespace kmaster
         void restoreLearned (const Learned& l) { const juce::SpinLock::ScopedLockType sl (learnLock); learned = l; pendingRestore = true; }
         Learned getLearned() const { const juce::SpinLock::ScopedLockType sl (learnLock); return learned; }
         void resetMeters() { resetMetersRequest.store (true); }
+        void resetOutput() { resetOutputRequest.store (true); }         // the master's integrated loudness and peak only
 
         std::atomic<int> phase { Idle };
         std::atomic<float> progress { 0.0f };
@@ -213,7 +214,7 @@ namespace kmaster
             StreamStats s;
             s.outLufs = ckOutL.load(); s.outTp = ckOutTp.load(); s.outSecs = ckOutSecs.load();
             s.inLufs = ckInL.load(); s.inTp = ckInTp.load(); s.inSecs = ckInSecs.load(); s.inClips = ckClips.load();
-            const int ph = phase.load(); s.learning = ph != Idle && ph != Done;
+            const int ph = phase.load(); s.learning = ph != Idle && ph != Done; s.recheck = ph == Check1 || ph == Check2;
             return s;
         }
 
@@ -387,6 +388,7 @@ namespace kmaster
         {
             target = targetLufs (s.loud);
             if (resetMetersRequest.exchange (false)) { resetCheckIn(); resetCheckOut(); clearGraphNow (true, true); inMeter.resetIntegrated(); outMeter.resetIntegrated(); tpMax.store (-100.0f); inPeakDb = -100.0f; }
+            if (resetOutputRequest.exchange (false)) { outMeter.resetIntegrated(); tpMax.store (-100.0f); resetCheckOut(); clearGraphNow (false, true); }
             if (pendingRestore.exchange (false))
             {
                 const juce::SpinLock::ScopedLockType sl (learnLock);
@@ -447,7 +449,7 @@ namespace kmaster
         {
             // the numbers belong to the current settings and a finished LEARN: start again whenever either changes
             const int ph = phase.load();
-            if (ph != ckPhase || ! s.sameLoudnessInputs (ckSettings)) { ckPhase = ph; ckSettings = s; resetCheckOut(); clearGraphNow (false, true); }
+            if (ph != ckPhase || ! s.sameLoudnessInputs (ckSettings)) { if (ph == Done && ckPhase >= Check1) { outMeter.resetIntegrated(); tpMax.store (-100.0f); } ckPhase = ph; ckSettings = s; resetCheckOut(); clearGraphNow (false, true); }
             if (ph != Done || settleCountdown > 0) return;
             if (ckSkip > 0) { ckSkip -= n; return; }           // let the gain settle
             ckOut.process (L, R, n);
@@ -467,7 +469,7 @@ namespace kmaster
                         learnedGain = juce::jlimit (-24.0f, 30.0f, learnedGain + (target - learnedFor) - juce::jmin (4.0f, over + 0.1f)); learnedFor = target;
                         holdPasses.store (pass + 1);
                         { const juce::SpinLock::ScopedLockType sl (learnLock); if (learned.valid) { learned.gainDb = learnedGain; learned.forTarget = learnedFor; } }
-                        resetCheckOut(); clearGraphNow (false, true);
+                        resetCheckOut(); clearGraphNow (false, true); outMeter.resetIntegrated();
                     }
                 }
             }
@@ -658,7 +660,7 @@ namespace kmaster
         float learnedIn = -16.0f, learnedGain = 5.0f, learnedFor = -11.0f, target = -11.0f;
         long long phaseSamples = 0, activeSamples = 0;
         int settleCountdown = 0, blockGuess = 512;
-        std::atomic<bool> learnRequest { false }, resetMetersRequest { false };
+        std::atomic<bool> learnRequest { false }, resetMetersRequest { false }, resetOutputRequest { false };
         mutable juce::SpinLock learnLock;
         Learned learned;
     };

@@ -99,6 +99,7 @@ void KingMasterProcessor::fixForPlatform()
     auto set = [this] (const char* id, float v) { auto* p = apvts.getParameter (id); p->beginChangeGesture(); p->setValueNotifyingHost (p->convertTo0to1 (v)); p->endChangeGesture(); };
     set ("loudness", (float) f.loudness); set ("loud_trim", f.trim); set ("ceiling", f.ceiling);
     chain.holdUnder (kmaster::targetLufs (f.loudness) + f.trim);
+    chain.resetOutput();
 }
 
 void KingMasterProcessor::getStateInformation (juce::MemoryBlock& dest)

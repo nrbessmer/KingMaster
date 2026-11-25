@@ -59,7 +59,7 @@ namespace kmaster
         float outLufs = -100.0f, outTp = -100.0f, outSecs = 0.0f;   // the master
         float inLufs = -100.0f, inTp = -100.0f, inSecs = 0.0f;      // the mix that arrives
         int   inClips = 0;                                          // runs of samples stuck at full scale
-        bool  learning = false;
+        bool  learning = false, recheck = false;                    // recheck = only the output level is being checked again
     };
 
     struct StreamReport
@@ -107,7 +107,7 @@ namespace kmaster
         if (! haveOut)
         {
             r.level = R::Waiting;
-            r.headline = s.learning ? "LEARNING: the streaming check starts when it is done" : "Play your song: checking its loudness for " + where.toLowerCase() + "...";
+            r.headline = s.recheck ? "Checking the new level..." : s.learning ? "LEARNING: the streaming check starts when it is done" : "Play your song: checking its loudness for " + where.toLowerCase() + "...";
             if (platform == P_AllStreaming || (platform >= P_Spotify && platform <= P_Deezer)) r.headline = s.learning ? r.headline : juce::String ("Play your song: checking its loudness for streaming...");
         }
         else

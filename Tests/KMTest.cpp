@@ -295,6 +295,10 @@ int main (int argc, char** argv)
         p.fixForPlatform(); run (p, mix, 1);
         run (p, mix, 2); r = p.streamReport();
         check (r.level == R::Ok && ! r.canFix && std::abs (p.chain.streamStats().outLufs + 14.0f) <= 0.9f, "after FIX IT: " + r.headline);
+        {   // settled: the gain never moves again, even through a much louder passage
+            juce::AudioBuffer<float> louder (mix); louder.applyGain (tdsp::dbToGain (6.0f)); const float g0 = p.chain.appliedGainDb.load(); run (p, louder, 2); const float g1 = p.chain.appliedGainDb.load();
+            check (std::abs (g1 - g0) < 0.001f, "after FIX IT has settled the gain never moves again (" + juce::String (g0, 2) + " -> " + juce::String (g1, 2) + " dB through a passage 6 dB louder)"); run (p, mix, 1);
+        }
         const auto s0 = p.chain.streamStats(); setP (p, "loud_trim", 1.0f); { juce::AudioBuffer<float> one (2, 512); one.clear(); juce::MidiBuffer m; p.processBlock (one, m); }
         check (s0.outSecs > 5.0f && p.chain.streamStats().outSecs < 0.1f, "changing the loudness starts the measurement again");
 

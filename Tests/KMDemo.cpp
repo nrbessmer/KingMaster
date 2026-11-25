@@ -49,7 +49,7 @@ int main (int argc, char** argv)
     const juce::String cmd = "PATH=/opt/homebrew/bin:/usr/local/bin:$PATH ffmpeg -hide_banner -loglevel error -y -f rawvideo -pix_fmt bgra -s " + juce::String (W) + "x" + juce::String (H)
                              + " -r " + juce::String (FPS) + " -i - -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p \"" + out.getChildFile ("demo_v.mp4").getFullPathName() + "\"";
     FILE* ff = popen (cmd.toRawUTF8(), "w"); if (! ff) { printf ("cannot start ffmpeg\n"); return 1; }
-    juce::AudioBuffer<float> all (2, (int) (SR * 160)); all.clear(); int w = 0;
+    juce::AudioBuffer<float> all (2, (int) (SR * 200)); all.clear(); int w = 0;
     std::vector<uint8_t> row ((size_t) W * H * 4); juce::AudioBuffer<float> buf (2, BS); juce::MidiBuffer midi;
 
     auto feed = [&] (KingMasterProcessor& p, Head& h, const juce::AudioBuffer<float>& src, int at)     // one block; the song loops
@@ -97,9 +97,9 @@ int main (int argc, char** argv)
         int at = 0; const int s0 = w;
         scene (p, ed, h, mix, at, 17.0, "Mister Master 1.5  -  is it too loud for streaming?", "A HIGH master plays: the check warns by itself and the graph draws the loudness along the song", &ed.stream);
         scene (p, ed, h, mix, at, 10.0, "It says how much each service would turn it down", "Spotify, Apple Music, YouTube, TIDAL, Amazon Music, Deezer  -  and shows where, in time and bars", &ed.graph);
-        scene (p, ed, h, mix, at, 27.0, "FIX IT", "Loudness, trim and ceiling are set for you, then Mister Master listens and keeps the master under the line", &ed.stream.fix, [&p] { p.fixForPlatform(); }, 2.0);
+        scene (p, ed, h, mix, at, 34.0, "FIX IT", "Loudness, trim and ceiling are set for you, then Mister Master listens and keeps the master under the line", &ed.stream.fix, [&p] { p.fixForPlatform(); }, 2.0);
         scene (p, ed, h, mix, at, 9.0, "Choose where the song is going", "Every service has its own line: Apple Music plays at -16", &ed.stream, [&p] { setP (p, "platform", 2.0f); }, 1.5);
-        scene (p, ed, h, mix, at, 22.0, "7 new streaming presets", "\"Apple Music -16\" sets the level and the check in one click", &ed.presetBar, [&p] { preset (p, "Apple Music -16"); }, 1.5);
+        scene (p, ed, h, mix, at, 33.0, "7 new streaming presets", "\"Apple Music -16\" sets the level and the check in one click", &ed.presetBar, [&p] { preset (p, "Apple Music -16"); }, 1.5);
         fadeIn (s0); fadeOut();
     }
     {   // 4: a mix that is too loud before mastering

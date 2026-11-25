@@ -207,14 +207,15 @@ namespace kmaster
         void clearGraph() { graphClearRequest.store (true); }
 
         // FIX IT and the streaming presets: after the normal level check, listen to the real master and take off
-        // whatever is still over `lufs` (never turns up; stops when you change the loudness yourself)
-        void holdUnder (float lufs) { holdLufs.store (lufs); holdPasses.store (0); }
+        // whatever is still over `lufs` (never turns up). It settles once, within the first seconds of music, and then
+        // never touches the gain again, so nothing can move in the middle of a song or a bounce.
+        void holdUnder (float lufs) { holdLufs.store (lufs); holdPasses.store (0); holdMiss.store (0); }
         StreamStats streamStats() const
         {
             StreamStats s;
             s.outLufs = ckOutL.load(); s.outTp = ckOutTp.load(); s.outSecs = ckOutSecs.load();
             s.inLufs = ckInL.load(); s.inTp = ckInTp.load(); s.inSecs = ckInSecs.load(); s.inClips = ckClips.load();
-            const int ph = phase.load(); s.learning = ph != Idle && ph != Done; s.recheck = ph == Check1 || ph == Check2;
+            const int ph = phase.load(); s.learning = ph != Idle && ph != Done; s.recheck = ph == Check1 || ph == Check2 || (holdLufs.load() < 0.0f && ph == Done);
             return s;
         }
 
@@ -459,7 +460,7 @@ namespace kmaster
             const float hold = holdLufs.load();
             if (hold < 0.0f)
             {
-                if (std::abs (targetLufs (s.loud) + s.trim - hold) > 0.05f) { if (holdPasses.load() > 0) holdLufs.store (1.0f); }   // changed by hand: leave it alone
+                if (std::abs (targetLufs (s.loud) + s.trim - hold) > 0.05f) { if (++holdMiss > 4) holdLufs.store (1.0f); }   // changed by hand: leave it alone (a few blocks' grace while parameters land)
                 else if (ckOutSecs.load() >= 8.0f && winIn.integrated.load() > -70.0f)
                 {
                     // like for like: this stretch of the song against the learned (loudest) one, as the level check does
@@ -471,6 +472,7 @@ namespace kmaster
                         { const juce::SpinLock::ScopedLockType sl (learnLock); if (learned.valid) { learned.gainDb = learnedGain; learned.forTarget = learnedFor; } }
                         resetCheckOut(); clearGraphNow (false, true); outMeter.resetIntegrated();
                     }
+                    else holdLufs.store (1.0f);                       // settled
                 }
             }
         }
@@ -639,7 +641,7 @@ namespace kmaster
         tdsp::TruePeak outTp, tpR;
         tdsp::LoudnessMeter ckIn, ckOut; tdsp::TruePeak ckTpL, ckTpR;         // streaming check
         std::atomic<float> ckOutL { -100.0f }, ckOutTp { -100.0f }, ckOutSecs { 0.0f }, ckInL { -100.0f }, ckInTp { -100.0f }, ckInSecs { 0.0f };
-        std::atomic<int> ckClips { 0 }, holdPasses { 0 };
+        std::atomic<int> ckClips { 0 }, holdPasses { 0 }, holdMiss { 0 };
         std::atomic<float> holdLufs { 1.0f };                                  // 1 = not holding
         Settings ckSettings; int ckPhase = -1, ckSkip = 0, clipRun = 0; bool clipNow = false;
         double tpSecs = -1.0, tpBar = -1.0, tpBarRate = 0.0, graphRun = 0.0, graphWarm = 0.0, graphLast = -10.0; bool tpPlaying = false;

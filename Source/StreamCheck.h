@@ -103,7 +103,7 @@ namespace kmaster
                                      + ": take the limiter off the mix bus or lower it, then LEARN again. Lost dynamics can't be put back.";
 
         // ---- the master
-        const bool haveOut = s.outSecs >= kCheckSeconds && s.outLufs > -70.0f;
+        const bool haveOut = ! s.recheck && s.outSecs >= kCheckSeconds && s.outLufs > -70.0f;
         if (! haveOut)
         {
             r.level = R::Waiting;

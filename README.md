@@ -8,7 +8,9 @@ sets a Smart EQ tone match, 3-band glue compression and the gain, then checks it
 Chain: Smart EQ > style tilt + Low / Mid / Presence / Air > 3-band compression + de-ess > width + mono bass
 > loudness gain > warmth soft-clip > true-peak lookahead limiter (ceiling in dBTP).
 EBU R128 / BS.1770 meter (integrated, short-term, momentary, true peak) and a loudness-matched COMPARE.
-27 genre presets. AU, VST3 and standalone app for macOS 12+ (Apple Silicon + Intel). Latency 5 ms (reported to the host).
+46 presets. Streaming check (StreamCheck.h): warns by itself when the master or the incoming mix is too loud for streaming,
+podcasts or a club, with a FIX IT button, what each service would turn down, and a loudness graph along the song that shows
+where (time and bars). It never changes the sound. AU, VST3 and standalone app for macOS 12+ (Apple Silicon + Intel). Latency 5 ms (reported to the host).
 
 Build: cmake -S . -B build -G Xcode && cmake --build build --config Release
 Tests: cmake -S . -B build-test -DKM_TESTS=ON && cmake --build build-test --target KMTest

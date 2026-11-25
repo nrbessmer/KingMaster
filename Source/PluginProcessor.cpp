@@ -51,6 +51,23 @@ void KingMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     float* L = buffer.getWritePointer (0);
     float* R = nch > 1 ? buffer.getWritePointer (1) : nullptr;
     if (R == nullptr) { R = monoScratch (n); std::copy (L, L + n, R); }   // preallocated: no audio-thread malloc
+    {
+        double secs = -1.0, bar = -1.0, rate = 0.0; bool playing = false;
+        if (auto* ph = getPlayHead())
+            if (auto pos = ph->getPosition())
+            {
+                playing = pos->getIsPlaying();
+                if (auto t = pos->getTimeInSeconds()) secs = *t;
+                else if (auto ts = pos->getTimeInSamples()) secs = (double) *ts / getSampleRate();
+                if (auto q = pos->getPpqPosition())
+                {
+                    const auto sig = pos->getTimeSignature().orFallback (juce::AudioPlayHead::TimeSignature { 4, 4 });
+                    const double qPerBar = juce::jmax (0.25, 4.0 * sig.numerator / juce::jmax (1, sig.denominator));
+                    bar = juce::jmax (0.0, *q / qPerBar); rate = pos->getBpm().orFallback (120.0) / 60.0 / qPerBar;
+                }
+            }
+        chain.setTransport (secs, playing, bar, rate);
+    }
     chain.process (L, R, n, reader.read());
     if (nch == 1) for (int i = 0; i < n; ++i) L[i] = 0.5f * (L[i] + R[i]);
     for (int c = 2; c < nch; ++c) buffer.clear (c, 0, n);
@@ -60,8 +77,28 @@ void KingMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 void KingMasterProcessor::loadPreset (int index)
 {
     if (! juce::isPositiveAndBelow (index, (int) kmaster::presets().size())) return;
-    tsyn::applyPreset (apvts, kmaster::presets()[(size_t) index], { "compare" });
+    // a preset never switches the streaming check off, and only the streaming presets change what it checks for
+    juce::StringArray keep { "compare", "stream_check" };
+    const auto& pr = kmaster::presets()[(size_t) index];
+    if (! juce::String (pr.settings).contains ("platform=")) keep.add ("platform");
+    tsyn::applyPreset (apvts, pr, keep);
+    if (! keep.contains ("platform"))
+        chain.holdUnder (kmaster::targetLufs ((int) apvts.getRawParameterValue ("loudness")->load()) + apvts.getRawParameterValue ("loud_trim")->load());
     currentPreset = index;
+}
+
+kmaster::StreamReport KingMasterProcessor::streamReport() const
+{
+    return kmaster::checkStreaming (apvts.getRawParameterValue ("stream_check")->load() > 0.5f,
+                                    (int) apvts.getRawParameterValue ("platform")->load(), chain.streamStats());
+}
+
+void KingMasterProcessor::fixForPlatform()
+{
+    const auto f = kmaster::fixFor ((int) apvts.getRawParameterValue ("platform")->load());
+    auto set = [this] (const char* id, float v) { auto* p = apvts.getParameter (id); p->beginChangeGesture(); p->setValueNotifyingHost (p->convertTo0to1 (v)); p->endChangeGesture(); };
+    set ("loudness", (float) f.loudness); set ("loud_trim", f.trim); set ("ceiling", f.ceiling);
+    chain.holdUnder (kmaster::targetLufs (f.loudness) + f.trim);
 }
 
 void KingMasterProcessor::getStateInformation (juce::MemoryBlock& dest)

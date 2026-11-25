@@ -19,7 +19,7 @@ namespace kmaster
               "style=Balanced loudness=Medium" },
             { "Gentle Polish", "Start Here", "Light touch: a little glue and tone match, streaming-friendly loudness.",
               "style=Balanced loudness=Low comp=0.2 warmth=0.1 smart_eq=0.4" },
-            { "Streaming -14 LUFS", "Start Here", "Matches Spotify / YouTube / Apple loudness so nothing gets turned down.",
+            { "Streaming -14 LUFS", "Start Here", "Matches Spotify / YouTube / TIDAL loudness so nothing gets turned down.",
               "style=Balanced loudness=Low ceiling=-1" },
 
             { "EDM Festival", "EDM & Dance", "Loud, bright and wide for main-stage drops.",
@@ -100,6 +100,22 @@ namespace kmaster
               "style=Balanced loudness=High loud_trim=1 comp=0.55 warmth=0.4 ceiling=-0.3" },
             { "Podcast Voice", "Utility", "Spoken word: even level, soft S's, -16 LUFS.",
               "style=Balanced loudness=Low loud_trim=-2 comp=0.5 deess=0.4 warmth=0.1" },
+
+            // 1.5: each one also points the streaming check at the right service
+            { "Streaming Safe", "Streaming", "-14 LUFS, -1 dBTP, and warns you if the mix or the master is too loud for any service.",
+              "style=Balanced loudness=Low comp=0.3 warmth=0.15 smart_eq=0.5 ceiling=-1 platform=All_Streaming" },
+            { "Spotify, YouTube, TIDAL", "Streaming", "-14 LUFS, -1 dBTP: nothing gets turned down on these three.",
+              "style=Balanced loudness=Low ceiling=-1 platform=Spotify" },
+            { "Apple Music -16", "Streaming", "-16 LUFS for Sound Check: the most dynamics, no turn-down.",
+              "style=Balanced loudness=Low loud_trim=-2 comp=0.3 warmth=0.15 ceiling=-1 platform=Apple_Music" },
+            { "Amazon Music -14 / -2 dBTP", "Streaming", "-14 LUFS with the lower -2 dBTP ceiling.",
+              "style=Balanced loudness=Low ceiling=-2 platform=Amazon_Music" },
+            { "Deezer -15", "Streaming", "-15 LUFS, -1 dBTP.",
+              "style=Balanced loudness=Low loud_trim=-1 ceiling=-1 platform=Deezer" },
+            { "Podcast Check -16", "Streaming", "Spoken word at -16 LUFS, checked against podcast loudness.",
+              "style=Balanced loudness=Low loud_trim=-2 comp=0.45 deess=0.4 warmth=0.1 ceiling=-1 platform=Podcast" },
+            { "Too-Loud Mix Rescue", "Streaming", "For a mix that arrives already squashed: no extra compression or drive, softer top, streaming level.",
+              "style=Warm loudness=Low comp=0 warmth=0 smart_eq=0.45 deess=0.35 ceiling=-1 platform=All_Streaming" },
         };
         return p;
     }

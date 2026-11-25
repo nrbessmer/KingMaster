@@ -226,19 +226,22 @@ namespace tdsp
         void reset() { hist.fill (0.0f); pos = 0; }
         inline float process (float x) noexcept
         {
-            hist[(size_t) pos] = x; pos = (pos + 1) % kTaps;
+            // the history is kept twice, so the newest kTaps samples are always contiguous (the compiler vectorises the sums)
+            hist[(size_t) pos] = hist[(size_t) (pos + kTaps)] = x; pos = (pos + 1) % kTaps;
+            const float* h = hist.data() + pos;
             float pk = 0.0f;
             for (int p = 0; p < kPhases; ++p)
             {
-                float s = 0.0f;
-                for (int t = 0; t < kTaps; ++t) s += coef[(size_t) p][(size_t) t] * hist[(size_t) ((pos + t) % kTaps)];
-                pk = juce::jmax (pk, std::abs (s));
+                const float* c = coef[(size_t) p].data();
+                float acc[8] {};
+                for (int t = 0; t < kTaps; t += 8) for (int k = 0; k < 8; ++k) acc[k] += c[t + k] * h[t + k];
+                pk = juce::jmax (pk, std::abs (acc[0] + acc[1] + acc[2] + acc[3] + acc[4] + acc[5] + acc[6] + acc[7]));
             }
             return pk;
         }
     private:
         std::array<std::array<float, kTaps>, kPhases> coef {};
-        std::array<float, kTaps> hist {};
+        std::array<float, 2 * kTaps> hist {};
         int pos = 0;
     };
 

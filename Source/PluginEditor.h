@@ -70,6 +70,44 @@ private:
     kmaster::Chain& chain;
 };
 
+// 1.5: warns by itself when the master, or the mix that arrives, is too loud for streaming (or podcasts, or a club)
+class StreamStrip : public juce::Component, public juce::SettableTooltipClient
+{
+public:
+    explicit StreamStrip (KingMasterProcessor& p);
+    void paint (juce::Graphics& g) override;
+    void resized() override;
+    void mouseDown (const juce::MouseEvent&) override { proc.chain.resetMeters(); }
+    void refresh();                                     // editor timer
+    kmaster::StreamReport report;
+    juce::TextButton fix { "FIX IT" };
+private:
+    juce::Colour colour() const;
+    KingMasterProcessor& proc;
+    tui::Toggle on;
+    tui::Choice platform;
+    juce::Rectangle<int> text;
+    float pulse = 0.0f;
+};
+
+// Loudness along the song: the mix and the master as lines, the limit across, red where it is too loud
+class LoudnessGraph : public juce::Component, public juce::SettableTooltipClient
+{
+public:
+    explicit LoudnessGraph (KingMasterProcessor& p);
+    void paint (juce::Graphics& g) override;
+    void mouseMove (const juce::MouseEvent& e) override { hoverX = e.x; repaint(); }
+    void mouseExit (const juce::MouseEvent&) override { hoverX = -1; repaint(); }
+    void mouseDoubleClick (const juce::MouseEvent&) override { proc.chain.clearGraph(); }
+    void refresh();                                     // editor timer
+    juce::String where, whereMix;                       // "0:31-1:04 (bars 17-33)"
+private:
+    KingMasterProcessor& proc;
+    std::vector<float> in, out, bars; std::vector<bool> clips;
+    std::vector<kmaster::LoudSpan> loudOut, loudIn;
+    int platform = 0, hoverX = -1, tick = 0; bool on = true;
+};
+
 class KingMasterEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
@@ -89,6 +127,8 @@ public:
     LearnPanel learnPanel;
     LoudnessPanel meter;
     EqView eqView;
+    StreamStrip stream;
+    LoudnessGraph graph;
     tui::LevelMeter gLow { "LOW", tui::Col::amber, -8.0f, 0.0f, true }, gMid { "MID", tui::Col::amber, -8.0f, 0.0f, true },
                     gHigh { "HIGH", tui::Col::amber, -8.0f, 0.0f, true }, gLim { "LIMIT", tui::Col::pink, -12.0f, 0.0f, true };
     std::vector<std::unique_ptr<tui::Knob>> knobs;
@@ -97,6 +137,6 @@ public:
     juce::TooltipWindow tooltips { this, 500 };
 private:
     int shownStyle = -1, shownLoud = -1;
-    juce::Rectangle<int> rStyle, rLoud, rLearn, rMeter, rTone, rDyn, rStereo, rOut;
+    juce::Rectangle<int> rStyle, rLoud, rLearn, rMeter, rStream, rGraph, rTone, rDyn, rStereo, rOut;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KingMasterEditor)
 };

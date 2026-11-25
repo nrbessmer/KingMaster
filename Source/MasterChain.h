@@ -18,6 +18,7 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "TullyDSP.h"
+#include "StreamCheck.h"
 
 namespace kmaster
 {
@@ -61,6 +62,9 @@ namespace kmaster
         l.add (std::make_unique<AudioParameterBool> (ParameterID { "mono_bass", 1 }, "Mono Bass", true));
         f ("ceiling", "Ceiling", { -3.0f, -0.1f, 0.1f }, -1.0f, tp);
         l.add (std::make_unique<AudioParameterBool> (ParameterID { "compare", 1 }, "Compare", false));
+        // 1.5: streaming check (display only: it never changes the sound). Appended after the older parameters.
+        l.add (std::make_unique<AudioParameterBool> (ParameterID { "stream_check", 1 }, "Streaming Check", true));
+        l.add (std::make_unique<AudioParameterChoice> (ParameterID { "platform", 1 }, "Check For", platformNames(), 0));
     }
 
     struct Settings
@@ -143,7 +147,7 @@ namespace kmaster
             sr = sampleRate;
             limiter.prepare (sr, 5.0);
             limiter.setRelease (60.0);
-            for (auto* m : { &inMeter, &outMeter, &winIn, &winOut, &winPre, &learnAll }) m->prepare (sr);
+            for (auto* m : { &inMeter, &outMeter, &winIn, &winOut, &winPre, &learnAll, &ckIn, &ckOut }) m->prepare (sr);
             for (auto& d : cmpDelay) d.prepare (limiter.getLatency() + 8);
             for (int i = 0; i < kOct; ++i)
                 octBp[(size_t) i].set (tdsp::Biquad::BandPass, sr, octaveCentres()[(size_t) i], 1.41);
@@ -176,6 +180,7 @@ namespace kmaster
             limiter.reset();
             for (auto& d : cmpDelay) d.reset();
             tpMax.store (-100.0f);
+            resetCheckIn(); resetCheckOut(); clearGraphNow (true, true);
         }
 
         // ---------------- learning control (message thread)
@@ -190,6 +195,27 @@ namespace kmaster
         std::array<std::atomic<float>, 3> bandGrDb {};
         std::atomic<float> appliedGainDb { 0.0f }, compareGainDb { 0.0f };
         tdsp::Meter meterOut;
+
+        // ---------------- streaming check (measured on the audio thread, read anywhere)
+        // ---- loudness along the song (for the graph): 3 s loudness of the mix and of the master at each quarter second
+        static constexpr int kGraph = 4800;                 // 20 minutes
+        std::array<std::atomic<float>, kGraph> gIn, gOut, gBar; std::array<std::atomic<unsigned char>, kGraph> gClip;
+        std::atomic<int> gMax { -1 };
+        // from processBlock, before process(): where the song is (secs < 0 = the host does not say), and whether it plays
+        void setTransport (double secs, bool playing, double bar, double barsPerSecond) { tpSecs = secs; tpPlaying = playing; tpBar = bar; tpBarRate = barsPerSecond; }
+        void clearGraph() { graphClearRequest.store (true); }
+
+        // FIX IT and the streaming presets: after the normal level check, listen to the real master and take off
+        // whatever is still over `lufs` (never turns up; stops when you change the loudness yourself)
+        void holdUnder (float lufs) { holdLufs.store (lufs); holdPasses.store (0); }
+        StreamStats streamStats() const
+        {
+            StreamStats s;
+            s.outLufs = ckOutL.load(); s.outTp = ckOutTp.load(); s.outSecs = ckOutSecs.load();
+            s.inLufs = ckInL.load(); s.inTp = ckInTp.load(); s.inSecs = ckInSecs.load(); s.inClips = ckClips.load();
+            const int ph = phase.load(); s.learning = ph != Idle && ph != Done;
+            return s;
+        }
 
         // EQ curve for display (smart EQ + style + manual), dB
         double eqResponseDb (double f) const
@@ -226,6 +252,7 @@ namespace kmaster
 
             inMeter.process (L, R, n);
             winIn.process (L, R, n);
+            measureIn (L, R, n);
             if (fullLearn || phase.load() == Spectrum) learnAll.process (L, R, n);
             if (phase.load() == Spectrum) accumulateSpectrum (L, R, n);
 
@@ -320,6 +347,8 @@ namespace kmaster
                 tdsp::TruePeak& tp = outTp; float pk = 0;
                 for (int i = 0; i < n; ++i) pk = juce::jmax (pk, tp.process (L[i]), tpR.process (R[i]));
                 tpMax.store (juce::jmax (tpMax.load(), tdsp::gainToDb (pk)));
+                measureOut (L, R, n, pk, s);
+                recordGraph (n);
             }
             inLufsS.store (inMeter.shortTerm.load());
             outLufsM.store (outMeter.momentary.load()); outLufsS.store (outMeter.shortTerm.load()); outLufsI.store (outMeter.integrated.load());
@@ -357,7 +386,7 @@ namespace kmaster
         void handleRequests (const Settings& s)
         {
             target = targetLufs (s.loud);
-            if (resetMetersRequest.exchange (false)) { inMeter.resetIntegrated(); outMeter.resetIntegrated(); tpMax.store (-100.0f); inPeakDb = -100.0f; }
+            if (resetMetersRequest.exchange (false)) { resetCheckIn(); resetCheckOut(); clearGraphNow (true, true); inMeter.resetIntegrated(); outMeter.resetIntegrated(); tpMax.store (-100.0f); inPeakDb = -100.0f; }
             if (pendingRestore.exchange (false))
             {
                 const juce::SpinLock::ScopedLockType sl (learnLock);
@@ -371,7 +400,7 @@ namespace kmaster
                     lastLearnSettings = s;
                 }
             }
-            if (learnRequest.exchange (false)) beginPhase (Spectrum);
+            if (learnRequest.exchange (false)) { resetCheckIn(); beginPhase (Spectrum); }
             // auto-learn on first audio when nothing has been learned yet
             if (phase.load() == Idle && ! autoStarted && winIn.momentary.load() > -45.0f) { autoStarted = true; beginPhase (Spectrum); }
             // settings that change loudness after learning: re-check the output level
@@ -394,6 +423,87 @@ namespace kmaster
             winIn.resetIntegrated(); winOut.resetIntegrated(); winPre.resetIntegrated();
             if (p == Spectrum) { octAcc.fill (0.0); octN = 0; haveSpectrum = false; last.style = -1; learnAll.resetIntegrated(); }
             if (p == Bands) { for (int b = 0; b < 3; ++b) { bandAcc[b] = 0; bandAccN[b] = 0; } }
+        }
+
+        // ---- streaming check
+        void resetCheckIn() { ckIn.reset(); ckInL.store (-100.0f); ckInTp.store (-100.0f); ckInSecs.store (0.0f); ckClips.store (0); clipRun = 0; }
+        void resetCheckOut() { ckOut.reset(); ckOutL.store (-100.0f); ckOutTp.store (-100.0f); ckOutSecs.store (0.0f); ckSkip = (int) (0.3 * sr); if (phase.load() == Done) winIn.resetIntegrated(); }
+        void measureIn (const float* L, const float* R, int n)
+        {
+            ckIn.process (L, R, n);
+            float pk = 0;
+            for (int i = 0; i < n; ++i)
+            {
+                pk = juce::jmax (pk, ckTpL.process (L[i]), ckTpR.process (R[i]));
+                // a clip = two or more samples in a row at full scale (or beyond it: a hot float bus)
+                if (std::abs (L[i]) >= 0.9995f || std::abs (R[i]) >= 0.9995f) { if (++clipRun == 2) { ckClips.store (ckClips.load() + 1); clipNow = true; } }
+                else clipRun = 0;
+            }
+            ckInTp.store (juce::jmax (ckInTp.load(), tdsp::gainToDb (pk)));
+            if (ckIn.momentary.load() > -45.0f) ckInSecs.store (ckInSecs.load() + (float) (n / sr));   // only count time with music playing
+            ckInL.store (ckIn.integrated.load());
+        }
+        void measureOut (const float* L, const float* R, int n, float peak, const Settings& s)
+        {
+            // the numbers belong to the current settings and a finished LEARN: start again whenever either changes
+            const int ph = phase.load();
+            if (ph != ckPhase || ! s.sameLoudnessInputs (ckSettings)) { ckPhase = ph; ckSettings = s; resetCheckOut(); clearGraphNow (false, true); }
+            if (ph != Done || settleCountdown > 0) return;
+            if (ckSkip > 0) { ckSkip -= n; return; }           // let the gain settle
+            ckOut.process (L, R, n);
+            ckOutTp.store (juce::jmax (ckOutTp.load(), tdsp::gainToDb (peak)));
+            if (ckOut.momentary.load() > -45.0f) ckOutSecs.store (ckOutSecs.load() + (float) (n / sr));
+            ckOutL.store (ckOut.integrated.load());
+            const float hold = holdLufs.load();
+            if (hold < 0.0f)
+            {
+                if (std::abs (targetLufs (s.loud) + s.trim - hold) > 0.05f) { if (holdPasses.load() > 0) holdLufs.store (1.0f); }   // changed by hand: leave it alone
+                else if (ckOutSecs.load() >= 8.0f && winIn.integrated.load() > -70.0f)
+                {
+                    // like for like: this stretch of the song against the learned (loudest) one, as the level check does
+                    const float over = ckOutL.load() + juce::jlimit (-6.0f, 6.0f, learnedIn - winIn.integrated.load()) - hold; const int pass = holdPasses.load();
+                    if (over > 0.25f && pass < 4)
+                    {
+                        learnedGain = juce::jlimit (-24.0f, 30.0f, learnedGain + (target - learnedFor) - juce::jmin (4.0f, over + 0.1f)); learnedFor = target;
+                        holdPasses.store (pass + 1);
+                        { const juce::SpinLock::ScopedLockType sl (learnLock); if (learned.valid) { learned.gainDb = learnedGain; learned.forTarget = learnedFor; } }
+                        resetCheckOut(); clearGraphNow (false, true);
+                    }
+                }
+            }
+        }
+
+        void clearGraphNow (bool in, bool out)
+        {
+            for (int i = 0; i < kGraph; ++i)
+            {
+                if (in) { gIn[(size_t) i].store (kNoData, std::memory_order_relaxed); gBar[(size_t) i].store (0.0f, std::memory_order_relaxed); gClip[(size_t) i].store (0, std::memory_order_relaxed); }
+                if (out) gOut[(size_t) i].store (kNoData, std::memory_order_relaxed);
+            }
+            if (in) { gMax.store (-1); graphRun = 0.0; graphWarm = 0.0; graphLast = -10.0; }
+        }
+        void recordGraph (int n)
+        {
+            if (graphClearRequest.exchange (false)) clearGraphNow (true, true);
+            const double dt = n / sr; const bool clip = clipNow; clipNow = false;
+            const bool host = tpSecs >= 0.0;
+            if (host ? ! tpPlaying : winIn.momentary.load() < -60.0f) { graphWarm = 0.0; return; }
+            const double now = host ? tpSecs + dt : (graphRun += dt);
+            if (now < graphLast - 0.05 || now > graphLast + dt + 0.2) graphWarm = 0.0;      // the playhead jumped: the 3 s window holds another place
+            graphLast = now; graphWarm += dt;
+            auto slotOf = [] (double t) { return (int) (t / (double) kGraphSlot); };
+            if (clip) { const int c = slotOf (now); if (c >= 0 && c < kGraph) { gClip[(size_t) c].store (1, std::memory_order_relaxed); if (c > gMax.load()) gMax.store (c); } }
+            if (graphWarm < 1.5) return;
+            // 3 s loudness belongs to the middle of its window (a shorter window right after a start or a jump)
+            const double span = juce::jmin (3.0, graphWarm); const int c = slotOf (now - 0.5 * span);
+            if (c < 0 || c >= kGraph) return;
+            const float comp = (float) (10.0 * std::log10 (3.0 / span));                      // the meter divides by 3 s even while it fills
+            const float i = inMeter.shortTerm.load(), o = outMeter.shortTerm.load();
+            const bool fresh = graphWarm < 3.0;
+            if (i > -60.0f) gIn[(size_t) c].store (fresh ? i + comp : i, std::memory_order_relaxed);
+            if (o > -60.0f && phase.load() == Done && settleCountdown <= 0 && ckOutSecs.load() > juce::jmin (3.0f, (float) graphWarm) - 0.1f) gOut[(size_t) c].store (fresh ? o + comp : o, std::memory_order_relaxed);
+            if (tpBar >= 0.0) gBar[(size_t) c].store ((float) juce::jmax (1.0, std::floor (tpBar - 0.5 * span * tpBarRate) + 1.0), std::memory_order_relaxed);
+            if (c > gMax.load()) gMax.store (c);
         }
 
         void accumulateSpectrum (const float* L, const float* R, int n)
@@ -525,6 +635,13 @@ namespace kmaster
         tdsp::Limiter limiter;
         tdsp::LoudnessMeter inMeter, outMeter, winIn, winOut, winPre, learnAll;   // learnAll: input over the whole learning run
         tdsp::TruePeak outTp, tpR;
+        tdsp::LoudnessMeter ckIn, ckOut; tdsp::TruePeak ckTpL, ckTpR;         // streaming check
+        std::atomic<float> ckOutL { -100.0f }, ckOutTp { -100.0f }, ckOutSecs { 0.0f }, ckInL { -100.0f }, ckInTp { -100.0f }, ckInSecs { 0.0f };
+        std::atomic<int> ckClips { 0 }, holdPasses { 0 };
+        std::atomic<float> holdLufs { 1.0f };                                  // 1 = not holding
+        Settings ckSettings; int ckPhase = -1, ckSkip = 0, clipRun = 0; bool clipNow = false;
+        double tpSecs = -1.0, tpBar = -1.0, tpBarRate = 0.0, graphRun = 0.0, graphWarm = 0.0, graphLast = -10.0; bool tpPlaying = false;
+        std::atomic<bool> graphClearRequest { false };
         tdsp::DelayLine cmpDelay[2];
         juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative> gainSmooth { 1.0f };
         juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative> matchSmooth { 1.0f };

@@ -42,6 +42,9 @@ public:
     void loadPreset (int index);
     int  getCurrentPreset() const noexcept { return currentPreset; }
 
+    kmaster::StreamReport streamReport() const;      // is this too loud for where it is going?
+    void fixForPlatform();                            // loudness, trim and ceiling for the chosen platform
+
     juce::AudioProcessorValueTreeState apvts;
     kmaster::Chain chain;
     tui::ScopeBuffer scope;
